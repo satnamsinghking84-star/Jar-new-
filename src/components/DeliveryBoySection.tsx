@@ -51,11 +51,19 @@ function extractCoords(mapLink?: string): Coords | null {
   return null;
 }
 
-// Calculate Euclidean distance (highly accurate for local neighborhood distances)
+// Calculate Earth distance in kilometers using the Haversine formula
 function getDistance(c1: Coords, c2: Coords): number {
-  const dLat = c2.lat - c1.lat;
-  const dLng = c2.lng - c1.lng;
-  return Math.sqrt(dLat * dLat + dLng * dLng);
+  const R = 6371; // Earth's radius in kilometers
+  const dLat = ((c2.lat - c1.lat) * Math.PI) / 180;
+  const dLng = ((c2.lng - c1.lng) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((c1.lat * Math.PI) / 180) *
+      Math.cos((c2.lat * Math.PI) / 180) *
+      Math.sin(dLng / 2) *
+      Math.sin(dLng / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c; // Distance in km
 }
 
 // Generate an official multi-point Google Maps Directions link
@@ -198,7 +206,26 @@ export default function DeliveryBoySection({ customers, onOpenDeliver }: Deliver
     sortedCustomers = [...optimizedWithCoords, ...withoutCoords];
   }
 
-  // 4. Determine start point for Multi-Stop Google Maps Route
+  // Calculate step-by-step distances and total route distance for the current sequence
+  let totalKmOfRoute = 0;
+  const stopDistancesFromPrev: { [customerId: string]: number } = {};
+  let currentPosForDistance: Coords | null = gpsCoords;
+
+  sortedCustomers.forEach((c) => {
+    const coords = extractCoords(c.mapLink);
+    if (coords) {
+      if (currentPosForDistance) {
+        const dist = getDistance(currentPosForDistance, coords);
+        stopDistancesFromPrev[c.id] = dist;
+        totalKmOfRoute += dist;
+      } else {
+        stopDistancesFromPrev[c.id] = 0;
+      }
+      currentPosForDistance = coords;
+    }
+  });
+
+  // Determine start point for Multi-Stop Google Maps Route
   const startCoordsForMap = gpsCoords || (withCoords.length > 0 ? withCoords[0].coords : null);
   const multiStopUrl = getMultiStopMapLink(startCoordsForMap, sortedCustomers);
 
@@ -300,6 +327,25 @@ export default function DeliveryBoySection({ customers, onOpenDeliver }: Deliver
                 </span>
               )}
             </div>
+            
+            {/* Total Route Distance Box */}
+            {withCoordsCount > 0 && (
+              <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-2xl p-3 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="text-xl">🏁</span>
+                  <div>
+                    <p className="text-[10px] text-emerald-300 font-bold uppercase tracking-wider">KUL DOOR (Total Route Distance)</p>
+                    <p className="text-sm font-black text-white">
+                      ~{totalKmOfRoute.toFixed(2)} km <span className="text-[10px] font-normal text-slate-300">({withCoordsCount} customer points)</span>
+                    </p>
+                  </div>
+                </div>
+                <div className="bg-emerald-500/20 border border-emerald-500/30 rounded-xl px-2.5 py-1 text-center">
+                  <p className="text-[9px] text-emerald-200 font-bold uppercase">Stops</p>
+                  <p className="text-xs font-black text-white">{withCoordsCount}</p>
+                </div>
+              </div>
+            )}
 
             {/* All-in-One Route Button */}
             {multiStopUrl ? (
@@ -331,6 +377,16 @@ export default function DeliveryBoySection({ customers, onOpenDeliver }: Deliver
         {sortedCustomers.map((c, i) => {
           const isClosed = c.status === 'closed';
           const hasCoords = extractCoords(c.mapLink) !== null;
+          
+          // Find if this is the very first customer in the list that has coords
+          const isFirstWithCoords = i === sortedCustomers.findIndex(sc => extractCoords(sc.mapLink) !== null);
+          const distFromPrev = stopDistancesFromPrev[c.id];
+          const showDistString = distFromPrev !== undefined && distFromPrev > 0
+            ? (isFirstWithCoords && gpsCoords
+                ? `📍 Live GPS se: ${distFromPrev.toFixed(2)} km`
+                : `🚗 Pichle Stop se: ${distFromPrev.toFixed(2)} km`)
+            : (isFirstWithCoords && hasCoords ? `📍 Start Point` : null);
+
           return (
             <div
               key={c.id}
@@ -369,6 +425,11 @@ export default function DeliveryBoySection({ customers, onOpenDeliver }: Deliver
                   ) : (
                     <span className="bg-white/10 border border-white/20 text-white/55 text-[9px] font-black px-2 py-0.5 rounded-full uppercase">
                       ❓ No GPS
+                    </span>
+                  )}
+                  {showDistString && (
+                    <span className="bg-blue-400/30 border border-blue-400/40 text-blue-100 text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider animate-pulse">
+                      {showDistString}
                     </span>
                   )}
                 </span>
