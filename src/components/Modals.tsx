@@ -206,14 +206,17 @@ export function CustomerModal({ isOpen, onClose, customer, onSave }: CustomerMod
 
         {/* Maps Link */}
         <div className="flex flex-col gap-1.5">
-          <label className="text-xs font-black text-slate-500 uppercase">🗺️ Google Maps Link (optional)</label>
+          <label className="text-xs font-black text-slate-500 uppercase">🗺️ Google Maps Link / Coordinates (optional)</label>
           <input
-            type="url"
+            type="text"
             value={mapLink}
             onChange={e => setMapLink(e.target.value)}
-            placeholder="Google Maps ka share link"
+            placeholder="Google Maps share link ya coords (jaise: 28.5355, 77.3910)"
             className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm outline-none bg-slate-50 focus:border-blue-500 focus:bg-white"
           />
+          <p className="text-[10px] text-slate-400 leading-normal">
+            💡 Tip: Isme link ya coordinates (jaise <code className="font-mono bg-slate-100 px-1 rounded">28.5355, 77.3910</code>) daalne se Delivery Boy tab me automatic sabse chhota rasta (Shortest Route) banega!
+          </p>
         </div>
 
         {/* Distributed Jars Stepper */}

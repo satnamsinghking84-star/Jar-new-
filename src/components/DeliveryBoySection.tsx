@@ -1,14 +1,85 @@
-import React from 'react';
-import { Phone, MapPin, Map, Clock, Package, HelpCircle } from 'lucide-react';
+import React, { useState } from 'react';
+import { Phone, MapPin, Map, Clock, Package, HelpCircle, Compass, Navigation, Check } from 'lucide-react';
 import { Customer } from '../types';
 import { getTimingOrder } from '../utils/helpers';
+
+interface Coords {
+  lat: number;
+  lng: number;
+}
 
 interface DeliveryBoySectionProps {
   customers: Customer[];
   onOpenDeliver: (id: string) => void;
 }
 
+// Helper to extract coordinates from Google Maps link or raw coordinates string
+function extractCoords(mapLink?: string): Coords | null {
+  if (!mapLink) return null;
+  // Match standard latitude and longitude formats (e.g. 28.5355, 77.3910 or within a Google Maps URL)
+  const regex = /(-?\d+\.\d+)\s*,\s*(-?\d+\.\d+)/;
+  const match = mapLink.match(regex);
+  if (match) {
+    const lat = parseFloat(match[1]);
+    const lng = parseFloat(match[2]);
+    if (lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
+      return { lat, lng };
+    }
+  }
+  return null;
+}
+
+// Calculate Euclidean distance (highly accurate for local neighborhood distances)
+function getDistance(c1: Coords, c2: Coords): number {
+  const dLat = c2.lat - c1.lat;
+  const dLng = c2.lng - c1.lng;
+  return Math.sqrt(dLat * dLat + dLng * dLng);
+}
+
+// Generate an official multi-point Google Maps Directions link
+function getMultiStopMapLink(startCoords: Coords | null, sortedCusts: Customer[]): string | null {
+  const waypointCusts = sortedCusts
+    .map(c => {
+      const coords = extractCoords(c.mapLink);
+      return coords ? { name: c.name, coords } : null;
+    })
+    .filter((x): x is { name: string; coords: Coords } => x !== null);
+
+  if (waypointCusts.length === 0) return null;
+
+  let originStr = "";
+  let startIdx = 0;
+
+  if (startCoords) {
+    originStr = `${startCoords.lat},${startCoords.lng}`;
+    startIdx = 0;
+  } else {
+    originStr = `${waypointCusts[0].coords.lat},${waypointCusts[0].coords.lng}`;
+    startIdx = 1;
+  }
+
+  // Destination is the last customer coordinate
+  const destCust = waypointCusts[waypointCusts.length - 1];
+  const destinationStr = `${destCust.coords.lat},${destCust.coords.lng}`;
+
+  // Waypoints are intermediate stops
+  const waypoints = waypointCusts.slice(startIdx, waypointCusts.length - 1);
+  const waypointsStr = waypoints.map(w => `${w.coords.lat},${w.coords.lng}`).join('|');
+
+  const baseUrl = "https://www.google.com/maps/dir/?api=1";
+  let url = `${baseUrl}&origin=${encodeURIComponent(originStr)}&destination=${encodeURIComponent(destinationStr)}`;
+  if (waypointsStr) {
+    url += `&waypoints=${encodeURIComponent(waypointsStr)}`;
+  }
+  return url;
+}
+
 export default function DeliveryBoySection({ customers, onOpenDeliver }: DeliveryBoySectionProps) {
+  const [optimizeMode, setOptimizeMode] = useState<'time' | 'distance'>('time');
+  const [gpsCoords, setGpsCoords] = useState<Coords | null>(null);
+  const [gpsLoading, setGpsLoading] = useState(false);
+  const [gpsError, setGpsError] = useState<string | null>(null);
+
   const visibleCustomers = customers.filter(c => {
     if (c.status !== 'closed') {
       return true; // Active customer
@@ -27,20 +98,217 @@ export default function DeliveryBoySection({ customers, onOpenDeliver }: Deliver
     );
   }
 
-  // Sort by delivery timing prioritised order
-  const sortedCustomers = [...visibleCustomers].sort(
+  // Get current Live Location of delivery boy
+  const getGpsLocation = () => {
+    if (!navigator.geolocation) {
+      setGpsError("Aapke phone/browser mein GPS available nahi hai.");
+      return;
+    }
+    setGpsLoading(true);
+    setGpsError(null);
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setGpsCoords({
+          lat: position.coords.latitude,
+          lng: position.coords.longitude
+        });
+        setGpsLoading(false);
+      },
+      (error) => {
+        setGpsError("GPS permission nahi mili. Pehle phone location/permission check karein.");
+        setGpsLoading(false);
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  };
+
+  // 1. Sort by timing (Default)
+  const timeSortedCustomers = [...visibleCustomers].sort(
     (a, b) => getTimingOrder(a.deliveryTime) - getTimingOrder(b.deliveryTime)
   );
 
+  // 2. Parse coordinates and split into lists
+  const withCoords: { customer: Customer; coords: Coords }[] = [];
+  const withoutCoords: Customer[] = [];
+
+  visibleCustomers.forEach(c => {
+    const coords = extractCoords(c.mapLink);
+    if (coords) {
+      withCoords.push({ customer: c, coords });
+    } else {
+      withoutCoords.push(c);
+    }
+  });
+
+  const withCoordsCount = withCoords.length;
+
+  // 3. Optimize sequence by distance (Nearest Neighbor Routing)
+  let sortedCustomers = timeSortedCustomers;
+  if (optimizeMode === 'distance') {
+    const optimizedWithCoords: Customer[] = [];
+    const unvisited = [...withCoords];
+
+    let currentPos: Coords | null = null;
+    if (gpsCoords) {
+      currentPos = gpsCoords;
+    } else if (unvisited.length > 0) {
+      // Fallback: use first customer as starting point
+      const first = unvisited.shift()!;
+      optimizedWithCoords.push(first.customer);
+      currentPos = first.coords;
+    }
+
+    while (unvisited.length > 0 && currentPos) {
+      let nearestIdx = 0;
+      let minDist = Infinity;
+      for (let i = 0; i < unvisited.length; i++) {
+        const dist = getDistance(currentPos, unvisited[i].coords);
+        if (dist < minDist) {
+          minDist = dist;
+          nearestIdx = i;
+        }
+      }
+      const nextNode = unvisited.splice(nearestIdx, 1)[0];
+      optimizedWithCoords.push(nextNode.customer);
+      currentPos = nextNode.coords;
+    }
+
+    sortedCustomers = [...optimizedWithCoords, ...withoutCoords];
+  }
+
+  // 4. Determine start point for Multi-Stop Google Maps Route
+  const startCoordsForMap = gpsCoords || (withCoords.length > 0 ? withCoords[0].coords : null);
+  const multiStopUrl = getMultiStopMapLink(startCoordsForMap, sortedCustomers);
+
   return (
     <div className="px-4 py-4 pb-24 space-y-4">
-      <div className="text-xs uppercase tracking-wider text-slate-400 font-extrabold pl-1">
-        📋 {sortedCustomers.length} Customer Aaj ke liye (Time ke hisaab se sorted)
+      {/* Route Optimizer Control Center */}
+      <div className="bg-gradient-to-br from-slate-900 to-slate-800 rounded-3xl p-5 text-white shadow-md border border-slate-700/50 space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Compass className="w-6 h-6 text-emerald-400 animate-spin" style={{ animationDuration: '6s' }} />
+            <div>
+              <h4 className="font-extrabold text-sm tracking-tight text-emerald-300">Auto-Route Optimizer</h4>
+              <p className="text-[10px] text-slate-300">Petrol aur time bachane ke liye optimal rasta</p>
+            </div>
+          </div>
+          <span className="bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[10px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider">
+            GPS Tool
+          </span>
+        </div>
+
+        {/* Mode Toggles */}
+        <div className="grid grid-cols-2 gap-2 bg-slate-800/80 p-1.5 rounded-2xl border border-slate-700/60">
+          <button
+            onClick={() => setOptimizeMode('time')}
+            className={`py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer border-none ${
+              optimizeMode === 'time'
+                ? 'bg-gradient-to-r from-blue-600 to-sky-500 text-white shadow-sm'
+                : 'text-slate-400 hover:text-white bg-transparent'
+            }`}
+          >
+            <Clock className="w-3.5 h-3.5" />
+            <span>⏰ Time Schedule</span>
+          </button>
+          <button
+            onClick={() => {
+              setOptimizeMode('distance');
+              if (!gpsCoords) getGpsLocation(); // Auto-fetch GPS
+            }}
+            className={`py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer border-none ${
+              optimizeMode === 'distance'
+                ? 'bg-gradient-to-r from-emerald-600 to-teal-500 text-white shadow-sm'
+                : 'text-slate-400 hover:text-white bg-transparent'
+            }`}
+          >
+            <Navigation className="w-3.5 h-3.5" />
+            <span>🗺️ Shortest Route</span>
+          </button>
+        </div>
+
+        {/* GPS Control and Status (when shortest route is active) */}
+        {optimizeMode === 'distance' && (
+          <div className="bg-slate-800/40 border border-slate-700/40 rounded-2xl p-3.5 space-y-3">
+            <div className="flex justify-between items-center text-xs">
+              <span className="text-slate-400 font-bold">Start Location:</span>
+              {gpsLoading ? (
+                <span className="text-amber-400 animate-pulse flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 bg-amber-400 rounded-full animate-ping"></span>
+                  GPS dhoondh raha hai...
+                </span>
+              ) : gpsCoords ? (
+                <span className="text-emerald-400 font-extrabold flex items-center gap-1">
+                  🟢 Live GPS Location Active
+                </span>
+              ) : (
+                <span className="text-slate-400">Pehle Customer ke point se</span>
+              )}
+            </div>
+
+            <div className="flex flex-col gap-2">
+              {!gpsCoords && !gpsLoading && (
+                <button
+                  onClick={getGpsLocation}
+                  className="bg-emerald-500/10 border border-emerald-500/25 text-emerald-300 font-bold text-xs py-2 px-4 rounded-xl hover:bg-emerald-500/20 active:scale-[0.98] transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <Compass className="w-3.5 h-3.5" />
+                  <span>📍 Live Location Se Map Karo</span>
+                </button>
+              )}
+              {gpsError && (
+                <p className="text-[10px] text-rose-300 font-semibold bg-rose-500/10 border border-rose-500/25 p-2 rounded-lg">
+                  ⚠️ {gpsError}
+                </p>
+              )}
+              {gpsCoords && (
+                <p className="text-[10px] text-slate-300 leading-normal">
+                  📍 Start point active hai: <code className="font-mono text-emerald-300 bg-slate-800 px-1 py-0.5 rounded">{gpsCoords.lat.toFixed(4)}, {gpsCoords.lng.toFixed(4)}</code>
+                </p>
+              )}
+            </div>
+
+            <div className="border-t border-slate-700/50 pt-2.5 flex justify-between items-center text-[10px] text-slate-300">
+              <span className="flex items-center gap-1">
+                <Check className="w-3.5 h-3.5 text-emerald-400" />
+                <span>GPS Coords Waale: <b>{withCoordsCount} / {visibleCustomers.length}</b></span>
+              </span>
+              {withCoordsCount < visibleCustomers.length && (
+                <span className="text-slate-400">
+                  ({visibleCustomers.length - withCoordsCount} bina maps ke aakhiri mein hain)
+                </span>
+              )}
+            </div>
+
+            {/* All-in-One Route Button */}
+            {multiStopUrl ? (
+              <a
+                href={multiStopUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="block text-center bg-gradient-to-r from-blue-600 to-indigo-600 hover:brightness-105 active:scale-[0.99] text-white font-extrabold text-xs py-3 px-4 rounded-xl shadow-md transition-all border border-blue-500"
+              >
+                🗺️ POORA ROUTE Ek Saath Maps Par Chalao →
+              </a>
+            ) : (
+              <p className="text-[10px] text-slate-400 text-center leading-normal">
+                💡 Customers ke page par unka maps link/coordinates daalein taaki direct multi-stop navigation active ho sake!
+              </p>
+            )}
+          </div>
+        )}
+      </div>
+
+      <div className="text-xs uppercase tracking-wider text-slate-400 font-extrabold pl-1 flex items-center justify-between">
+        <span>📋 {sortedCustomers.length} Customer Aaj ke liye</span>
+        <span className="text-[10px] font-bold bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full">
+          Sorted: {optimizeMode === 'distance' ? 'Shortest Route 🗺️' : 'Time Scheduled ⏰'}
+        </span>
       </div>
 
       <div className="space-y-4">
         {sortedCustomers.map((c, i) => {
           const isClosed = c.status === 'closed';
+          const hasCoords = extractCoords(c.mapLink) !== null;
           return (
             <div
               key={c.id}
@@ -56,11 +324,20 @@ export default function DeliveryBoySection({ customers, onOpenDeliver }: Deliver
                   ? 'bg-gradient-to-r from-slate-600 to-slate-400'
                   : 'bg-gradient-to-r from-emerald-700 to-emerald-500'
               }`}>
-                <span className="font-extrabold text-sm flex items-center gap-2">
+                <span className="font-extrabold text-sm flex items-center gap-2 flex-wrap">
                   <span>#{i + 1} &nbsp; {c.name}</span>
                   {isClosed && (
                     <span className="bg-red-500/30 border border-red-400 text-white text-[10px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider animate-pulse">
                       Closed (Pending Jars)
+                    </span>
+                  )}
+                  {hasCoords ? (
+                    <span className="bg-emerald-400/20 border border-emerald-400/30 text-emerald-200 text-[9px] font-black px-2 py-0.5 rounded-full uppercase">
+                      📍 GPS OK
+                    </span>
+                  ) : (
+                    <span className="bg-white/10 border border-white/20 text-white/55 text-[9px] font-black px-2 py-0.5 rounded-full uppercase">
+                      ❓ No GPS
                     </span>
                   )}
                 </span>
