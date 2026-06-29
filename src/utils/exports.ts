@@ -576,3 +576,35 @@ export function shareOnWhatsApp(customers: Customer[]) {
   const encoded = encodeURIComponent(msg);
   window.open('https://wa.me/?text=' + encoded, '_blank');
 }
+
+export function sendWhatsAppReminder(c: Customer) {
+  if (!c.phone) {
+    alert('⚠️ Is customer ka phone number save nahi hai!');
+    return;
+  }
+
+  const pendingCalc = calcPending(c);
+  const pendingAmt = pendingCalc.total;
+
+  if (pendingAmt <= 0) {
+    alert('✅ Is customer ka koi payment pending nahi hai!');
+    return;
+  }
+
+  // Clean and format phone number (add 91 country code for India if 10 digits)
+  let cleanedPhone = c.phone.trim().replace(/[^0-9]/g, '');
+  if (cleanedPhone.length === 10) {
+    cleanedPhone = '91' + cleanedPhone;
+  }
+
+  // Friendly and professional reminder text
+  const msg = `*नमस्कार ${c.name} जी!* 🙏\n\n` +
+    `Aapke *Jar Business* ke account mein *₹${pendingAmt.toLocaleString('en-IN')}* ka payment pending hai.\n` +
+    `📦 Jars at your location: *${c.jarsAtCustomer} Jars*\n\n` +
+    `Kripya jald se jald apna pending bill clear karein.\n` +
+    `Aap online (GPay/PhonePe/Paytm) ya cash se pay kar sakte hain. Thank you! 😊`;
+
+  const encoded = encodeURIComponent(msg);
+  window.open(`https://wa.me/${cleanedPhone}?text=${encoded}`, '_blank');
+}
+

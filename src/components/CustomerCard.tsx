@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { Customer } from '../types';
 import { calcPending } from '../utils/helpers';
+import { sendWhatsAppReminder } from '../utils/exports';
 
 interface CustomerCardProps {
   key?: string | number;
@@ -149,10 +150,21 @@ export default function CustomerCard({
         </span>
 
         {pendingAmt > 0 ? (
-          <span className="bg-red-50 border border-red-100 text-red-700 rounded-full px-3 py-1 text-xs font-bold flex items-center gap-1">
-            <AlertTriangle className="w-3.5 h-3.5 animate-pulse" />
-            <span>Pending: ₹{pendingAmt}</span>
-          </span>
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="bg-red-50 border border-red-100 text-red-700 rounded-full px-3 py-1 text-xs font-bold flex items-center gap-1">
+              <AlertTriangle className="w-3.5 h-3.5 animate-pulse" />
+              <span>Pending: ₹{pendingAmt}</span>
+            </span>
+            {customer.phone && (
+              <button
+                onClick={() => sendWhatsAppReminder(customer)}
+                className="bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-700 hover:text-emerald-800 rounded-full px-2.5 py-1 text-xs font-extrabold transition-all flex items-center gap-1 cursor-pointer shadow-sm active:scale-95"
+                title="WhatsApp payment reminder bheinjein"
+              >
+                <span>💬 Remind</span>
+              </button>
+            )}
+          </div>
         ) : (
           <span className="bg-emerald-50 border border-emerald-100 text-emerald-700 rounded-full px-3 py-1 text-xs font-bold flex items-center gap-1">
             <CheckCircle2 className="w-3.5 h-3.5" />

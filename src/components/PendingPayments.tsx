@@ -2,6 +2,7 @@ import React from 'react';
 import { AlertTriangle, Banknote } from 'lucide-react';
 import { Customer } from '../types';
 import { calcPending } from '../utils/helpers';
+import { sendWhatsAppReminder } from '../utils/exports';
 
 interface PendingPaymentsProps {
   customers: Customer[];
@@ -19,6 +20,7 @@ export default function PendingPayments({ customers, onOpenCashPayment }: Pendin
         deliveryPending: p.deliveryPending,
         monthlyDue: p.monthlyDue,
         total: p.total,
+        rawCustomer: c,
       };
     })
     .filter(x => x.total > 0);
@@ -76,14 +78,25 @@ export default function PendingPayments({ customers, onOpenCashPayment }: Pendin
                     )}
                   </div>
 
-                  {/* Payment recording button */}
-                  <button
-                    onClick={() => onOpenCashPayment(x.id)}
-                    className="w-full mt-1 bg-gradient-to-r from-emerald-600 to-teal-600 text-white border border-emerald-500 hover:brightness-105 active:scale-[0.99] rounded-xl py-2 px-3 text-xs font-bold shadow-sm transition-all flex items-center justify-center gap-1.5 cursor-pointer"
-                  >
-                    <Banknote className="w-4 h-4" />
-                    <span>💵 Cash Mila - Payment Mark Karo</span>
-                  </button>
+                  {/* Payment recording & WhatsApp Reminder buttons */}
+                  <div className="flex gap-2 mt-1">
+                    <button
+                      onClick={() => onOpenCashPayment(x.id)}
+                      className="flex-1 bg-gradient-to-r from-emerald-600 to-teal-600 text-white border border-emerald-500 hover:brightness-105 active:scale-[0.99] rounded-xl py-2 px-2 text-xs font-bold shadow-sm transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                    >
+                      <Banknote className="w-3.5 h-3.5" />
+                      <span>💵 Cash Mila</span>
+                    </button>
+                    {x.rawCustomer.phone && (
+                      <button
+                        onClick={() => sendWhatsAppReminder(x.rawCustomer)}
+                        className="bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-700 hover:text-emerald-800 active:scale-[0.99] rounded-xl py-2 px-3 text-xs font-black transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
+                        title="WhatsApp Par Payment Reminder Bhejein"
+                      >
+                        <span>💬 WhatsApp Alert</span>
+                      </button>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>
