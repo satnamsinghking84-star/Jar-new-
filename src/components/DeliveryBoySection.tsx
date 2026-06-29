@@ -116,7 +116,7 @@ export default function DeliveryBoySection({ customers, onOpenDeliver }: Deliver
               <div className="px-4 py-2.5 bg-slate-50/50 border-b border-slate-50 flex gap-2 flex-wrap">
                 <span className="bg-emerald-50 border border-emerald-100 text-emerald-700 text-xs font-bold rounded-full px-3 py-1 flex items-center gap-1">
                   <Package className="w-3.5 h-3.5" />
-                  <span>Dene hain (Current Stock): {c.jarsAtCustomer}</span>
+                  <span>Dene hain (Current Stock): 0</span>
                 </span>
                 <span className="bg-orange-50 border border-orange-100 text-orange-700 text-xs font-bold rounded-full px-3 py-1 flex items-center gap-1">
                   <Package className="w-3.5 h-3.5" />
