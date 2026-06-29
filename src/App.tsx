@@ -616,23 +616,31 @@ export default function App() {
         {/* 2.5 OWNER PASSWORD SCREEN */}
         {role === 'owner' && !isOwnerAuthenticated && (
           <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            className="px-4 py-12 flex flex-col items-center justify-center min-h-[70vh]"
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            transition={{ duration: 0.3, ease: 'easeOut' }}
+            className="px-4 py-8 flex flex-col items-center justify-center min-h-[75vh]"
           >
-            <div className="bg-white rounded-3xl p-8 shadow-xl border border-slate-100 max-w-sm w-full text-center relative overflow-hidden">
-              <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-blue-600 to-sky-400"></div>
+            <div className="bg-white/95 backdrop-blur-md rounded-3xl p-6 sm:p-8 shadow-2xl border border-slate-100 max-w-sm w-full text-center relative overflow-hidden">
+              {/* Top premium accent bar */}
+              <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-blue-600 via-indigo-500 to-sky-400"></div>
               
-              <div className="mx-auto w-16 h-16 bg-blue-50 rounded-2xl flex items-center justify-center mb-6 text-blue-600">
-                <Lock className="w-8 h-8" />
+              {/* Glow background accent */}
+              <div className="absolute -top-12 -left-12 w-24 h-24 bg-blue-400/10 rounded-full blur-2xl pointer-events-none"></div>
+              <div className="absolute -bottom-12 -right-12 w-24 h-24 bg-indigo-400/10 rounded-full blur-2xl pointer-events-none"></div>
+
+              {/* Icon with interactive ring */}
+              <div className="relative mx-auto w-20 h-20 bg-slate-50 border border-slate-100 rounded-3xl flex items-center justify-center mb-6 text-blue-600 shadow-inner">
+                <div className="absolute inset-0 bg-blue-50/50 rounded-3xl animate-pulse"></div>
+                <Lock className="w-9 h-9 relative z-10" />
               </div>
 
               <h2 className="text-2xl font-black text-slate-800 tracking-tight mb-2">
-                Owner Dashboard Security
+                Owner Security Code
               </h2>
-              <p className="text-slate-500 text-sm mb-6 leading-relaxed">
-                Mahaul surakshit hai! Aage badhne ke liye kripya owner password dalein.
+              <p className="text-slate-500 text-sm mb-6 leading-relaxed max-w-[280px] mx-auto">
+                Kripya Dashboard ka surakshit password enter karke access unlock karein.
               </p>
 
               <form
@@ -646,14 +654,14 @@ export default function App() {
                     showToast('🔓 Owner Dashboard unlocked successfully!');
                   } else {
                     setPasswordError(true);
-                    showToast('❌ Galat password! Kripya sahi password dalein.');
+                    showToast('❌ Galat password! Kripya sahi password enter karein.');
                   }
                 }}
                 className="space-y-4"
               >
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
-                    <KeyRound className="w-4 h-4" />
+                    <KeyRound className="w-5 h-5 text-slate-400" />
                   </div>
                   <input
                     type={showPassword ? 'text' : 'password'}
@@ -663,44 +671,50 @@ export default function App() {
                       if (passwordError) setPasswordError(false);
                     }}
                     placeholder="Srkshit password dalein..."
-                    className={`w-full pl-10 pr-10 py-3.5 bg-slate-50 border rounded-xl text-sm font-semibold transition-all focus:outline-none focus:ring-2 ${
+                    className={`w-full pl-11 pr-11 py-4 bg-slate-50/50 border rounded-2xl text-base font-semibold transition-all duration-200 focus:outline-none focus:ring-4 ${
                       passwordError
-                        ? 'border-red-300 focus:ring-red-100 bg-red-50 text-red-900'
-                        : 'border-slate-200 focus:ring-blue-100 focus:border-blue-500 text-slate-800'
+                        ? 'border-red-300 focus:ring-red-100 bg-red-50/50 text-red-900'
+                        : 'border-slate-200 focus:ring-blue-50 focus:border-blue-500 text-slate-800'
                     }`}
                     autoFocus
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 cursor-pointer"
+                    className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
+                    style={{ minWidth: '44px', minHeight: '44px' }}
+                    aria-label={showPassword ? "Hide password" : "Show password"}
                   >
-                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                   </button>
                 </div>
 
-                {passwordError && (
-                  <motion.div
-                    initial={{ opacity: 0, scale: 0.95 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    className="flex items-center gap-1.5 justify-center text-xs text-red-600 font-bold bg-red-50 py-2 px-3 rounded-lg border border-red-100"
-                  >
-                    <ShieldAlert className="w-3.5 h-3.5 text-red-500" />
-                    <span>Galat password hai, dobara koshish karein!</span>
-                  </motion.div>
-                )}
+                <AnimatePresence>
+                  {passwordError && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -8, scale: 0.95 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: -8, scale: 0.95 }}
+                      className="flex items-center gap-2 justify-center text-xs text-red-600 font-bold bg-red-50 py-2.5 px-3.5 rounded-xl border border-red-100"
+                    >
+                      <ShieldAlert className="w-4 h-4 text-red-500 shrink-0" />
+                      <span>Galat password hai, dobara koshish karein!</span>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
 
                 <button
                   type="submit"
-                  className="w-full bg-blue-600 text-white font-extrabold py-3.5 px-6 rounded-xl text-sm cursor-pointer shadow-md shadow-blue-100 hover:bg-blue-700 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
+                  className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-extrabold py-4 px-6 rounded-2xl text-base cursor-pointer shadow-lg shadow-blue-500/10 hover:shadow-blue-500/20 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
                 >
-                  Dashboard Kholein 🔓
+                  <span>Dashboard Kholein 🔓</span>
                 </button>
               </form>
 
               <button
                 onClick={() => handleRoleSelect(null)}
-                className="mt-6 text-xs text-slate-400 font-bold hover:text-slate-600 cursor-pointer transition-colors block mx-auto underline underline-offset-4"
+                className="mt-6 text-sm text-slate-400 font-bold hover:text-slate-600 cursor-pointer transition-colors block mx-auto underline underline-offset-4"
+                style={{ minHeight: '44px', display: 'inline-flex', alignItems: 'center' }}
               >
                 ← Waapis Role Select Karein
               </button>
