@@ -230,8 +230,7 @@ export default function App() {
       sessionStorage.setItem('jarRole', selected);
     } else {
       sessionStorage.removeItem('jarRole');
-      sessionStorage.removeItem('owner_auth');
-      setIsOwnerAuthenticated(false);
+      // Do not clear owner_auth here so that the session remains unlocked in the active tab/window
       setPasswordInput('');
       setPasswordError(false);
     }
