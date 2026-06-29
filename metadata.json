@@ -1,0 +1,6 @@
+{
+  "name": "Jar Business Manager",
+  "description": "A comprehensive water jar delivery and business management system for owners, delivery boys, and expenses.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
