@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, Table, FileText, Send, HelpCircle, CheckCircle2, Cloud } from 'lucide-react';
+import { Plus, Table, FileText, Send, HelpCircle, CheckCircle2, Cloud, Lock, KeyRound, Eye, EyeOff, ShieldAlert } from 'lucide-react';
 import { Customer, Expense, UserRole } from './types';
 import {
   loadCustomers,
@@ -51,6 +51,14 @@ export default function App() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [stock, setStock] = useState<number>(0);
+
+  // Security / Password States
+  const [isOwnerAuthenticated, setIsOwnerAuthenticated] = useState<boolean>(() => {
+    return sessionStorage.getItem('owner_auth') === 'true';
+  });
+  const [passwordInput, setPasswordInput] = useState('');
+  const [passwordError, setPasswordError] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   // Filter States
   const [dashFromDate, setDashFromDate] = useState('');
@@ -222,6 +230,10 @@ export default function App() {
       sessionStorage.setItem('jarRole', selected);
     } else {
       sessionStorage.removeItem('jarRole');
+      sessionStorage.removeItem('owner_auth');
+      setIsOwnerAuthenticated(false);
+      setPasswordInput('');
+      setPasswordError(false);
     }
   };
 
@@ -602,8 +614,103 @@ export default function App() {
         {/* 2. SPLASH ROLE SELECTOR SCREEN */}
         {role === null && <RoleSelector onSelectRole={handleRoleSelect} />}
 
+        {/* 2.5 OWNER PASSWORD SCREEN */}
+        {role === 'owner' && !isOwnerAuthenticated && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className="px-4 py-12 flex flex-col items-center justify-center min-h-[70vh]"
+          >
+            <div className="bg-white rounded-3xl p-8 shadow-xl border border-slate-100 max-w-sm w-full text-center relative overflow-hidden">
+              <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-blue-600 to-sky-400"></div>
+              
+              <div className="mx-auto w-16 h-16 bg-blue-50 rounded-2xl flex items-center justify-center mb-6 text-blue-600">
+                <Lock className="w-8 h-8" />
+              </div>
+
+              <h2 className="text-2xl font-black text-slate-800 tracking-tight mb-2">
+                Owner Dashboard Security
+              </h2>
+              <p className="text-slate-500 text-sm mb-6 leading-relaxed">
+                Mahaul surakshit hai! Aage badhne ke liye kripya owner password dalein.
+              </p>
+
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (passwordInput === 'Sat369') {
+                    setIsOwnerAuthenticated(true);
+                    sessionStorage.setItem('owner_auth', 'true');
+                    setPasswordError(false);
+                    setPasswordInput('');
+                    showToast('🔓 Owner Dashboard unlocked successfully!');
+                  } else {
+                    setPasswordError(true);
+                    showToast('❌ Galat password! Kripya sahi password dalein.');
+                  }
+                }}
+                className="space-y-4"
+              >
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                    <KeyRound className="w-4 h-4" />
+                  </div>
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    value={passwordInput}
+                    onChange={(e) => {
+                      setPasswordInput(e.target.value);
+                      if (passwordError) setPasswordError(false);
+                    }}
+                    placeholder="Srkshit password dalein..."
+                    className={`w-full pl-10 pr-10 py-3.5 bg-slate-50 border rounded-xl text-sm font-semibold transition-all focus:outline-none focus:ring-2 ${
+                      passwordError
+                        ? 'border-red-300 focus:ring-red-100 bg-red-50 text-red-900'
+                        : 'border-slate-200 focus:ring-blue-100 focus:border-blue-500 text-slate-800'
+                    }`}
+                    autoFocus
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 cursor-pointer"
+                  >
+                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+
+                {passwordError && (
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    className="flex items-center gap-1.5 justify-center text-xs text-red-600 font-bold bg-red-50 py-2 px-3 rounded-lg border border-red-100"
+                  >
+                    <ShieldAlert className="w-3.5 h-3.5 text-red-500" />
+                    <span>Galat password hai, dobara koshish karein!</span>
+                  </motion.div>
+                )}
+
+                <button
+                  type="submit"
+                  className="w-full bg-blue-600 text-white font-extrabold py-3.5 px-6 rounded-xl text-sm cursor-pointer shadow-md shadow-blue-100 hover:bg-blue-700 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
+                >
+                  Dashboard Kholein 🔓
+                </button>
+              </form>
+
+              <button
+                onClick={() => handleRoleSelect(null)}
+                className="mt-6 text-xs text-slate-400 font-bold hover:text-slate-600 cursor-pointer transition-colors block mx-auto underline underline-offset-4"
+              >
+                ← Waapis Role Select Karein
+              </button>
+            </div>
+          </motion.div>
+        )}
+
         {/* 3. OWNER DASHBOARD VIEW */}
-        {role === 'owner' && (
+        {role === 'owner' && isOwnerAuthenticated && (
           <div className="space-y-4 animate-in fade-in duration-350">
             {/* Dashboard metrics cards */}
             <Dashboard
