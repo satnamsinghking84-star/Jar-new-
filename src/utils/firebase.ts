@@ -7,5 +7,6 @@ const app = initializeApp(firebaseConfig);
 // Use initializeFirestore with ignoreUndefinedProperties configuration and the specific firestoreDatabaseId
 export const db = initializeFirestore(app, {
   ignoreUndefinedProperties: true,
+  experimentalForceLongPolling: true,
 }, firebaseConfig.firestoreDatabaseId);
 

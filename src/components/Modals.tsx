@@ -214,9 +214,27 @@ export function CustomerModal({ isOpen, onClose, customer, onSave }: CustomerMod
             placeholder="Google Maps share link ya coords (jaise: 28.5355, 77.3910)"
             className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm outline-none bg-slate-50 focus:border-blue-500 focus:bg-white"
           />
-          <p className="text-[10px] text-slate-400 leading-normal">
-            💡 Tip: Isme link ya coordinates (jaise <code className="font-mono bg-slate-100 px-1 rounded">28.5355, 77.3910</code>) daalne se Delivery Boy tab me automatic sabse chhota rasta (Shortest Route) banega!
-          </p>
+          
+          {mapLink.trim() && (mapLink.includes('maps.app.goo.gl') || mapLink.includes('goo.gl/maps') || !mapLink.match(/(-?\d+\.\d+)/)) && (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-[11px] text-amber-800 leading-normal">
+              <span className="font-black block mb-1">⚠️ Note about Short Link / Text:</span>
+              Google Maps ke short link (<code className="font-mono bg-amber-100 px-1 rounded">maps.app.goo.gl</code>) ya seedhe naam me coordinate (lat, lng) nahi hote. 
+              Pehle Stop, Doosra Stop automatic lagane ke liye, **kripya niche diye tareeqe se coordinates daalein**.
+            </div>
+          )}
+
+          <div className="bg-slate-50 border border-slate-100 rounded-xl p-3.5 space-y-2 text-[11px]">
+            <span className="font-black text-slate-700 block text-xs">📍 Android / iPhone par GPS Coordinates kaise nikalein:</span>
+            <ol className="list-decimal pl-4 text-slate-600 space-y-1">
+              <li>Apne phone me <strong className="text-blue-900">Google Maps</strong> kholein.</li>
+              <li>Customer ke ghar/dukaan ki location par <strong className="text-blue-900">Touch karke hold (lamba press)</strong> karein jab tak laal pin na aa jaye.</li>
+              <li>Niche unka coordinates (jaise: <code className="font-mono bg-slate-200 px-1 rounded text-slate-800">22.2942, 73.2034</code>) likha dikhega.</li>
+              <li>Un coordinates ko copy karke is box me paste kar dein!</li>
+            </ol>
+            <p className="text-[10px] text-emerald-600 font-extrabold leading-normal mt-1 flex items-center gap-1">
+              🚀 Benefit: Isse system automatic sabse chhota rasta (Shortest Route) aur Stop Sequence (Stop #1, Stop #2) bana dega!
+            </p>
+          </div>
         </div>
 
         {/* Distributed Jars Stepper */}

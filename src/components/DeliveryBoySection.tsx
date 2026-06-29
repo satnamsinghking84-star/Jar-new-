@@ -16,16 +16,38 @@ interface DeliveryBoySectionProps {
 // Helper to extract coordinates from Google Maps link or raw coordinates string
 function extractCoords(mapLink?: string): Coords | null {
   if (!mapLink) return null;
-  // Match standard latitude and longitude formats (e.g. 28.5355, 77.3910 or within a Google Maps URL)
-  const regex = /(-?\d+\.\d+)\s*,\s*(-?\d+\.\d+)/;
-  const match = mapLink.match(regex);
-  if (match) {
-    const lat = parseFloat(match[1]);
-    const lng = parseFloat(match[2]);
+  const cleaned = mapLink.trim();
+
+  // 1. Check for standard @latitude,longitude format in URL (e.g. /@22.2942,73.2034,17z)
+  const atMatch = cleaned.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/);
+  if (atMatch) {
+    const lat = parseFloat(atMatch[1]);
+    const lng = parseFloat(atMatch[2]);
     if (lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
       return { lat, lng };
     }
   }
+
+  // 2. Check for query parameters like q=latitude,longitude or ll=latitude,longitude
+  const paramMatch = cleaned.match(/[?&](q|ll|cbll|saddr|daddr|place)=(-?\d+\.\d+),(-?\d+\.\d+)/i);
+  if (paramMatch) {
+    const lat = parseFloat(paramMatch[2]);
+    const lng = parseFloat(paramMatch[3]);
+    if (lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
+      return { lat, lng };
+    }
+  }
+
+  // 3. Check for raw decimal latitude, longitude in text (e.g. "22.2942, 73.2034")
+  const rawMatch = cleaned.match(/(-?\d+\.\d+)\s*[,\s]\s*(-?\d+\.\d+)/);
+  if (rawMatch) {
+    const lat = parseFloat(rawMatch[1]);
+    const lng = parseFloat(rawMatch[2]);
+    if (lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
+      return { lat, lng };
+    }
+  }
+
   return null;
 }
 
@@ -325,7 +347,16 @@ export default function DeliveryBoySection({ customers, onOpenDeliver }: Deliver
                   : 'bg-gradient-to-r from-emerald-700 to-emerald-500'
               }`}>
                 <span className="font-extrabold text-sm flex items-center gap-2 flex-wrap">
-                  <span>#{i + 1} &nbsp; {c.name}</span>
+                  {optimizeMode === 'distance' ? (
+                    <span className="bg-white/20 border border-white/30 text-white text-[11px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider flex items-center gap-1">
+                      📍 STOP #{i + 1}
+                    </span>
+                  ) : (
+                    <span className="bg-white/15 border border-white/25 text-white text-[11px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider">
+                      #{i + 1}
+                    </span>
+                  )}
+                  <span className="font-extrabold text-sm ml-1">{c.name}</span>
                   {isClosed && (
                     <span className="bg-red-500/30 border border-red-400 text-white text-[10px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider animate-pulse">
                       Closed (Pending Jars)
