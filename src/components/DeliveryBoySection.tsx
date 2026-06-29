@@ -9,18 +9,20 @@ interface DeliveryBoySectionProps {
 }
 
 export default function DeliveryBoySection({ customers, onOpenDeliver }: DeliveryBoySectionProps) {
-  if (customers.length === 0) {
+  const activeCustomers = customers.filter(c => c.status !== 'closed');
+
+  if (activeCustomers.length === 0) {
     return (
       <div className="min-h-[50vh] flex flex-col items-center justify-center p-6 text-slate-400 text-center">
         <HelpCircle className="w-12 h-12 text-slate-300 mb-2 animate-bounce" />
-        <p className="font-bold text-sm">Abhi koi customer nahi hai.</p>
+        <p className="font-bold text-sm">Abhi koi active customer nahi hai.</p>
         <p className="text-xs text-slate-400 mt-1">Owner ko boleind customer add karne ke liye.</p>
       </div>
     );
   }
 
   // Sort by delivery timing prioritised order
-  const sortedCustomers = [...customers].sort(
+  const sortedCustomers = [...activeCustomers].sort(
     (a, b) => getTimingOrder(a.deliveryTime) - getTimingOrder(b.deliveryTime)
   );
 

@@ -32,6 +32,7 @@ interface CustomerCardProps {
   onDelete: (id: string) => void;
   onOpenTimingModal: (id: string) => void;
   onOpenEditDelivery: (custId: string, delIndex: number) => void;
+  onToggleStatus: (id: string) => void;
 }
 
 export default function CustomerCard({
@@ -45,6 +46,7 @@ export default function CustomerCard({
   onDelete,
   onOpenTimingModal,
   onOpenEditDelivery,
+  onToggleStatus,
 }: CustomerCardProps) {
   const lastDeliveries = (customer.deliveries || []).slice(0, 3);
   const totalDelivered = (customer.deliveries || []).reduce((s, d) => s + d.delivered, 0);
@@ -67,9 +69,15 @@ export default function CustomerCard({
   const lastPayments = (customer.payments || []).slice(0, 3);
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden hover:shadow-md transition-all">
+    <div className={`bg-white rounded-2xl shadow-sm border overflow-hidden hover:shadow-md transition-all duration-300 ${
+      customer.status === 'closed' ? 'border-slate-300 opacity-80' : 'border-slate-100'
+    }`}>
       {/* Top Banner: Name + Serial */}
-      <div className="bg-gradient-to-r from-blue-600 to-sky-500 text-white px-4 py-3.5 flex justify-between items-start">
+      <div className={`transition-all duration-300 text-white px-4 py-3.5 flex justify-between items-start ${
+        customer.status === 'closed'
+          ? 'bg-gradient-to-r from-slate-600 to-slate-500'
+          : 'bg-gradient-to-r from-blue-600 to-sky-500'
+      }`}>
         <div>
           <h3 className="font-extrabold text-base flex items-center gap-2">
             <User className="w-4 h-4 text-sky-100" />
@@ -85,9 +93,25 @@ export default function CustomerCard({
             </a>
           )}
         </div>
-        <span className="bg-white/20 text-white text-[11px] font-black px-2.5 py-1 rounded-full border border-white/10">
-          #{index + 1}
-        </span>
+        <div className="flex items-center gap-2">
+          {/* Status Badge Toggle */}
+          <button
+            onClick={() => onToggleStatus(customer.id)}
+            className={`text-[10px] font-black px-2.5 py-1 rounded-full border transition-all cursor-pointer flex items-center gap-1.5 ${
+              customer.status === 'closed'
+                ? 'bg-slate-700/40 border-slate-400 text-slate-100 hover:bg-slate-700/60'
+                : 'bg-emerald-500/20 border-emerald-400 text-emerald-100 hover:bg-emerald-500/40'
+            }`}
+            title="Click karke active/close badlein"
+          >
+            <span className={`w-1.5 h-1.5 rounded-full ${customer.status === 'closed' ? 'bg-slate-300' : 'bg-emerald-400 animate-pulse'}`}></span>
+            <span>{customer.status === 'closed' ? 'CLOSED' : 'ACTIVE'}</span>
+          </button>
+
+          <span className="bg-white/20 text-white text-[11px] font-black px-2.5 py-1 rounded-full border border-white/10">
+            #{index + 1}
+          </span>
+        </div>
       </div>
 
       {/* Address / Location Row */}

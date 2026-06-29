@@ -29,6 +29,7 @@ export interface Customer {
   deliveries: Delivery[];
   payments: PaymentRecord[];
   addedOn: string;
+  status?: 'active' | 'closed';
 }
 
 export interface Expense {

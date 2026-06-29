@@ -278,6 +278,20 @@ export default function App() {
     }
   };
 
+  const handleToggleStatus = async (id: string) => {
+    const cust = customers.find(c => c.id === id);
+    if (!cust) return;
+    const newStatus = cust.status === 'closed' ? 'active' : 'closed';
+    const updatedCust = { ...cust, status: newStatus };
+    try {
+      await setDoc(doc(db, 'customers', id), updatedCust);
+      showToast(newStatus === 'closed' ? '📁 Customer status changed to CLOSED.' : '✅ Customer status changed to ACTIVE.');
+    } catch (error) {
+      console.error('Error toggling customer status:', error);
+      showToast('❌ Cloud save fail! Status update nahi ho saki.');
+    }
+  };
+
   const handleSaveTiming = async (custId: string, time: string) => {
     const cust = customers.find(c => c.id === custId);
     if (cust) {
@@ -800,8 +814,12 @@ export default function App() {
                 </div>
               ) : (
                 <div className="space-y-4">
-                  <div className="text-xs uppercase tracking-wider text-slate-400 font-extrabold pl-1 mb-1">
-                    📋 {customers.length} Active Customer{customers.length !== 1 ? 's' : ''}
+                  <div className="text-xs uppercase tracking-wider text-slate-400 font-extrabold pl-1 mb-1 flex items-center justify-between">
+                    <span>📋 Total: {customers.length} Customers</span>
+                    <span className="flex items-center gap-2 font-black">
+                      <span className="text-emerald-600">🟢 Active: {customers.filter(c => c.status !== 'closed').length}</span>
+                      <span className="text-slate-500">⚪ Closed: {customers.filter(c => c.status === 'closed').length}</span>
+                    </span>
                   </div>
 
                   {customers.map((c, i) => (
@@ -817,6 +835,7 @@ export default function App() {
                       onDelete={handleDeleteCustomer}
                       onOpenTimingModal={handleOpenTimingModal}
                       onOpenEditDelivery={handleOpenEditDeliveryModal}
+                      onToggleStatus={handleToggleStatus}
                     />
                   ))}
                 </div>

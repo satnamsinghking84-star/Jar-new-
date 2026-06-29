@@ -65,6 +65,7 @@ export function CustomerModal({ isOpen, onClose, customer, onSave }: CustomerMod
   const [notes, setNotes] = useState('');
   const [timingPreset, setTimingPreset] = useState('');
   const [customDeliveryTime, setCustomDeliveryTime] = useState('');
+  const [status, setStatus] = useState<'active' | 'closed'>('active');
 
   useEffect(() => {
     if (customer) {
@@ -79,6 +80,7 @@ export function CustomerModal({ isOpen, onClose, customer, onSave }: CustomerMod
       setMonthlyAmt(customer.monthlyAmt || '');
       setAgent(customer.agent || '');
       setNotes(customer.notes || '');
+      setStatus(customer.status || 'active');
 
       const savedTime = customer.deliveryTime || '';
       const presets = [
@@ -114,6 +116,7 @@ export function CustomerModal({ isOpen, onClose, customer, onSave }: CustomerMod
       setNotes('');
       setTimingPreset('');
       setCustomDeliveryTime('');
+      setStatus('active');
     }
   }, [customer, isOpen]);
 
@@ -151,6 +154,7 @@ export function CustomerModal({ isOpen, onClose, customer, onSave }: CustomerMod
       deliveries: customer ? customer.deliveries : [],
       payments: customer ? customer.payments : [],
       addedOn: customer ? customer.addedOn : todayStr(),
+      status: status,
     };
 
     onSave(savedCustomer);
@@ -361,6 +365,23 @@ export function CustomerModal({ isOpen, onClose, customer, onSave }: CustomerMod
               className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm outline-none bg-slate-50 focus:border-blue-500 focus:bg-white"
             />
           )}
+        </div>
+
+        {/* Status Dropdown */}
+        <div className="flex flex-col gap-1.5">
+          <label className="text-xs font-black text-slate-500 uppercase">📈 Customer Status</label>
+          <select
+            value={status}
+            onChange={e => setStatus(e.target.value as 'active' | 'closed')}
+            className={`w-full border rounded-xl px-3 py-2.5 text-sm outline-none font-bold transition-all ${
+              status === 'closed'
+                ? 'border-slate-300 bg-slate-100 text-slate-700'
+                : 'border-emerald-200 bg-emerald-50/50 text-emerald-800 focus:border-emerald-500 focus:bg-white'
+            }`}
+          >
+            <option value="active">🟢 Active (Inki Delivery karni hai)</option>
+            <option value="closed">⚪ Closed (Inki Delivery band hai)</option>
+          </select>
         </div>
 
         {/* Save button */}
