@@ -46,20 +46,16 @@ export function calcPending(c: Customer): PendingCalculations {
   const cashPaid = (c.payments || []).reduce((s, p) => s + (p.amount || 0), 0);
 
   if (c.payType === 'monthly') {
-    // Monthly customer: difference between expected vs paid
+    // Monthly customer: difference between expected vs cash paid
     const totalDelivered = (c.deliveries || []).reduce((s, d) => s + (d.delivered || 0), 0);
     const expectedAmt = c.monthlyAmt ? c.monthlyAmt : totalDelivered * rate;
-    const paidInDelivery = (c.deliveries || [])
-      .filter(d => d.paidStatus !== 'pending')
-      .reduce((s, d) => s + (d.amount || 0), 0);
-    const monthlyDue = Math.max(0, expectedAmt - paidInDelivery - cashPaid);
+    const monthlyDue = Math.max(0, expectedAmt - cashPaid);
     return { deliveryPending: 0, monthlyDue, total: monthlyDue };
   } else {
-    // Per-delivery customer: sum up pending deliveries
-    const grossPending = (c.deliveries || [])
+    // Per-delivery customer: sum of pending deliveries
+    const deliveryPending = (c.deliveries || [])
       .filter(d => d.paidStatus === 'pending')
       .reduce((s, d) => s + (d.amount > 0 ? d.amount : (d.delivered || 0) * rate), 0);
-    const deliveryPending = Math.max(0, grossPending - cashPaid);
     return { deliveryPending, monthlyDue: 0, total: deliveryPending };
   }
 }

@@ -57,15 +57,28 @@ export default function CustomerCard({
   const pendingCalc = calcPending(customer);
   const pendingAmt = pendingCalc.total;
 
-  const expectedAmt = customer.monthlyAmt
-    ? customer.monthlyAmt
-    : totalDelivered * (customer.ratePerJar || 0);
-  const paidInDelivery = (customer.deliveries || [])
-    .filter(d => d.paidStatus !== 'pending')
-    .reduce((s, d) => s + (d.amount || 0), 0);
-  const extraPayments = (customer.payments || []).reduce((s, p) => s + (p.amount || 0), 0);
-  const alreadyPaid = paidInDelivery + extraPayments;
-  const due = Math.max(0, expectedAmt - alreadyPaid);
+  let expectedAmt = 0;
+  let alreadyPaid = 0;
+  let due = 0;
+
+  if (customer.payType === 'monthly') {
+    expectedAmt = customer.monthlyAmt
+      ? customer.monthlyAmt
+      : totalDelivered * rate;
+    alreadyPaid = (customer.payments || []).reduce((s, p) => s + (p.amount || 0), 0);
+    due = Math.max(0, expectedAmt - alreadyPaid);
+  } else {
+    // Per delivery
+    expectedAmt = (customer.deliveries || []).reduce(
+      (s, d) => s + (d.amount > 0 ? d.amount : (d.delivered || 0) * rate),
+      0
+    );
+    const pendingAmt = (customer.deliveries || [])
+      .filter(d => d.paidStatus === 'pending')
+      .reduce((s, d) => s + (d.amount > 0 ? d.amount : (d.delivered || 0) * rate), 0);
+    alreadyPaid = expectedAmt - pendingAmt;
+    due = pendingAmt;
+  }
 
   const lastPayments = (customer.payments || []).slice(0, 3);
 
