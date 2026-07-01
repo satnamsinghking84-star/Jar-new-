@@ -56,7 +56,7 @@ export function CustomerModal({ isOpen, onClose, customer, onSave }: CustomerMod
   const [phone, setPhone] = useState('');
   const [address, setAddress] = useState('');
   const [mapLink, setMapLink] = useState('');
-  const [jarsAtCustomer, setJarsAtCustomer] = useState(2);
+  const [jarsAtCustomer, setJarsAtCustomer] = useState(0);
   const [monthlyPlan, setMonthlyPlan] = useState(30);
   const [ratePerJar, setRatePerJar] = useState<number | ''>('');
   const [payType, setPayType] = useState<'perDelivery' | 'monthly'>('perDelivery');
@@ -107,7 +107,7 @@ export function CustomerModal({ isOpen, onClose, customer, onSave }: CustomerMod
       setPhone('');
       setAddress('');
       setMapLink('');
-      setJarsAtCustomer(2);
+      setJarsAtCustomer(0);
       setMonthlyPlan(30);
       setRatePerJar('');
       setPayType('perDelivery');
@@ -262,6 +262,18 @@ export function CustomerModal({ isOpen, onClose, customer, onSave }: CustomerMod
               +
             </button>
           </div>
+          {customer && customer.deliveries && customer.deliveries.length > 0 && (
+            <button
+              type="button"
+              onClick={() => {
+                const netFromDel = customer.deliveries.reduce((sum, d) => sum + (d.delivered || 0) - (d.collected || 0), 0);
+                setJarsAtCustomer(Math.max(0, netFromDel));
+              }}
+              className="text-[10px] text-blue-600 hover:text-blue-800 font-black flex items-center gap-1 cursor-pointer self-start border border-blue-200 bg-blue-50/50 hover:bg-blue-50 px-2.5 py-1.5 rounded-lg mt-0.5 transition-all active:scale-[0.98]"
+            >
+              🔄 Delivery history se calculation karein (Net: {customer.deliveries.reduce((sum, d) => sum + (d.delivered || 0) - (d.collected || 0), 0)} Jars)
+            </button>
+          )}
         </div>
 
         {/* Monthly Plan Stepper */}

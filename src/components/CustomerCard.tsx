@@ -34,6 +34,7 @@ interface CustomerCardProps {
   onOpenTimingModal: (id: string) => void;
   onOpenEditDelivery: (custId: string, delIndex: number) => void;
   onToggleStatus: (id: string) => void;
+  onSyncJarsCount?: (id: string, count: number) => void;
 }
 
 export default function CustomerCard({
@@ -48,9 +49,14 @@ export default function CustomerCard({
   onOpenTimingModal,
   onOpenEditDelivery,
   onToggleStatus,
+  onSyncJarsCount,
 }: CustomerCardProps) {
-  const lastDeliveries = (customer.deliveries || []).slice(0, 3);
+  const [showAllDeliveries, setShowAllDeliveries] = React.useState(false);
+  const deliveriesList = customer.deliveries || [];
+  const lastDeliveries = showAllDeliveries ? deliveriesList : deliveriesList.slice(0, 3);
   const totalDelivered = (customer.deliveries || []).reduce((s, d) => s + d.delivered, 0);
+  const computedNetJars = (customer.deliveries || []).reduce((sum, d) => sum + (d.delivered || 0) - (d.collected || 0), 0);
+  const isOutOfSync = (customer.deliveries || []).length > 0 && customer.jarsAtCustomer !== Math.max(0, computedNetJars);
 
   // Calculations
   const rate = customer.ratePerJar || 0;
@@ -153,6 +159,20 @@ export default function CustomerCard({
           <Package className="w-3.5 h-3.5" />
           <span>Unke paas: {customer.jarsAtCustomer} Jar</span>
         </span>
+        {isOutOfSync && onSyncJarsCount && (
+          <button
+            type="button"
+            onClick={() => {
+              if (confirm(`Kya aap calculation correct karna chahte hain?\nHistory ke hisaab se unke paas ${Math.max(0, computedNetJars)} Jar hone chahiye.`)) {
+                onSyncJarsCount(customer.id, Math.max(0, computedNetJars));
+              }
+            }}
+            className="bg-amber-500 hover:bg-amber-600 text-white rounded-full px-2.5 py-1 text-[10px] font-black flex items-center gap-1 cursor-pointer shadow-sm active:scale-95 transition-all animate-pulse"
+            title="Calculation error thik karein"
+          >
+            ⚠️ Thik Karein ({Math.max(0, computedNetJars)} Jar)
+          </button>
+        )}
         <span className="bg-emerald-50 border border-emerald-100 text-emerald-700 rounded-full px-3 py-1 text-xs font-bold flex items-center gap-1">
           <Calendar className="w-3.5 h-3.5" />
           <span>Plan: {customer.monthlyPlan}/mo</span>
@@ -229,42 +249,73 @@ export default function CustomerCard({
         {lastDeliveries.length === 0 ? (
           <p className="text-xs text-slate-400 italic">Abhi koi delivery record nahi hai</p>
         ) : (
-          <div className="space-y-1.5">
-            {lastDeliveries.map((d, di) => {
-              const displayAmt = d.amount > 0 ? d.amount : (d.delivered || 0) * rate;
-              return (
-                <div
-                  key={di}
-                  onClick={() => onOpenEditDelivery(customer.id, di)}
-                  className="flex items-center justify-between text-xs py-1.5 px-2 rounded-lg bg-slate-50 hover:bg-slate-100 border border-slate-100/50 cursor-pointer group transition-all"
-                  title="Click karo edit karne ke liye"
-                >
-                  <span className="text-slate-500 font-medium">📅 {d.date}</span>
-                  <div className="flex items-center gap-2">
-                    <span className="text-blue-700 font-extrabold">📦 {d.delivered} Jar</span>
-                    {d.collected > 0 && (
-                      <span className="text-emerald-700 font-bold bg-emerald-50 px-1.5 py-0.5 rounded text-[10px]">
-                        ↩ {d.collected} wapas
-                      </span>
-                    )}
-                    <span
-                      className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
-                        d.paidStatus === 'pending'
-                          ? 'bg-red-50 text-red-600 border border-red-100'
-                          : 'bg-emerald-50 text-emerald-700 border border-emerald-100'
-                      }`}
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs border-collapse">
+              <thead>
+                <tr className="border-b border-slate-200 text-slate-400 text-[10px] uppercase font-semibold">
+                  <th className="py-1 px-1">Date</th>
+                  <th className="py-1 px-1 text-center">Jar</th>
+                  <th className="py-1 px-1 text-center">Waps</th>
+                  <th className="py-1 px-1 text-right">Payment</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {lastDeliveries.map((d, di) => {
+                  const displayAmt = d.amount > 0 ? d.amount : (d.delivered || 0) * rate;
+                  const isPending = d.paidStatus === 'pending';
+                  return (
+                    <tr
+                      key={di}
+                      onClick={() => onOpenEditDelivery(customer.id, di)}
+                      className="hover:bg-slate-50 cursor-pointer group transition-all text-[11px] sm:text-xs"
+                      title="Click karo edit karne ke liye"
                     >
-                      {d.paidStatus === 'pending' ? `⚠️ ₹${displayAmt} Pending` : displayAmt > 0 ? `✅ ₹${displayAmt}` : 'Paid'}
-                    </span>
-                    <Edit className="w-3 h-3 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity ml-1" />
-                  </div>
-                </div>
-              );
-            })}
-            {(customer.deliveries || []).length > 3 && (
-              <p className="text-[10px] text-slate-400 text-right font-medium">
-                ... aur {customer.deliveries.length - 3} aur records
-              </p>
+                      <td className="py-2 px-1 text-slate-600 font-medium whitespace-nowrap">
+                        📅 {d.date}
+                      </td>
+                      <td className="py-2 px-1 text-center text-blue-700 font-extrabold whitespace-nowrap">
+                        {d.delivered}
+                      </td>
+                      <td className="py-2 px-1 text-center text-emerald-700 font-bold whitespace-nowrap">
+                        {d.collected > 0 ? `${d.collected}` : '-'}
+                      </td>
+                      <td className="py-2 px-1 text-right whitespace-nowrap">
+                        <span
+                          className={`inline-block text-[9px] sm:text-[10px] font-black px-1.5 py-0.5 rounded-full ${
+                            isPending
+                              ? 'bg-red-50 text-red-600 border border-red-100'
+                              : 'bg-emerald-50 text-emerald-700 border border-emerald-100'
+                          }`}
+                        >
+                          {isPending ? `⚠️ ₹${displayAmt}` : displayAmt > 0 ? `✅ ₹${displayAmt}` : 'Paid'}
+                        </span>
+                        <Edit className="inline-block w-3 h-3 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity ml-1 align-middle" />
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+            {deliveriesList.length > 3 && (
+              <div className="mt-2 text-right">
+                {!showAllDeliveries ? (
+                  <button
+                    type="button"
+                    onClick={() => setShowAllDeliveries(true)}
+                    className="text-[10px] sm:text-xs text-blue-600 hover:text-blue-800 font-extrabold hover:underline cursor-pointer inline-flex items-center gap-1 bg-blue-50/50 hover:bg-blue-50 px-2.5 py-1 rounded-md transition-all"
+                  >
+                    🔍 ... aur {deliveriesList.length - 3} aur records dekhein
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setShowAllDeliveries(false)}
+                    className="text-[10px] sm:text-xs text-slate-500 hover:text-slate-700 font-bold hover:underline cursor-pointer inline-flex items-center gap-1 bg-slate-100/60 hover:bg-slate-100 px-2.5 py-1 rounded-md transition-all"
+                  >
+                    ⬆️ Kam records dikhayein
+                  </button>
+                )}
+              </div>
             )}
           </div>
         )}
@@ -302,11 +353,11 @@ export default function CustomerCard({
                 Payment Records
               </span>
               {lastPayments.map((p, pi) => (
-                <div key={pi} className="flex justify-between items-center py-0.5 text-xs">
-                  <span className="text-slate-500 font-medium">{p.date}</span>
-                  <div className="flex items-center gap-2">
-                    <span className="text-emerald-700 font-extrabold">₹{p.amount}</span>
-                    {p.note && <span className="text-slate-400 text-[10px]">({p.note})</span>}
+                <div key={pi} className="flex justify-between items-center py-0.5 text-[10px] sm:text-xs">
+                  <span className="text-slate-500 font-medium whitespace-nowrap shrink-0">{p.date}</span>
+                  <div className="flex items-center gap-1 sm:gap-2 min-w-0 shrink-0">
+                    <span className="text-emerald-700 font-extrabold whitespace-nowrap shrink-0">₹{p.amount}</span>
+                    {p.note && <span className="text-slate-400 text-[9px] sm:text-[10px] whitespace-nowrap shrink-0">({p.note})</span>}
                   </div>
                 </div>
               ))}

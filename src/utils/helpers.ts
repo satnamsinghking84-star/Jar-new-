@@ -59,3 +59,34 @@ export function calcPending(c: Customer): PendingCalculations {
     return { deliveryPending, monthlyDue: 0, total: deliveryPending };
   }
 }
+
+export function getOverdueDays(c: Customer): number {
+  const pending = calcPending(c);
+  if (pending.total <= 0) return 0;
+  
+  const today = new Date(todayStr());
+  
+  if (c.payType === 'monthly') {
+    if (!c.deliveries || c.deliveries.length === 0) {
+      if (c.addedOn) {
+        const addedDate = new Date(c.addedOn.split('T')[0]);
+        const diffTime = today.getTime() - addedDate.getTime();
+        return Math.max(0, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
+      }
+      return 0;
+    }
+    const dates = c.deliveries.map(d => new Date(d.date).getTime());
+    const minDate = Math.min(...dates);
+    const diffTime = today.getTime() - minDate;
+    return Math.max(0, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
+  } else {
+    const pendingDeliveries = (c.deliveries || []).filter(d => d.paidStatus === 'pending');
+    if (pendingDeliveries.length === 0) return 0;
+    
+    const dates = pendingDeliveries.map(d => new Date(d.date).getTime());
+    const minDate = Math.min(...dates);
+    const diffTime = today.getTime() - minDate;
+    return Math.max(0, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
+  }
+}
+

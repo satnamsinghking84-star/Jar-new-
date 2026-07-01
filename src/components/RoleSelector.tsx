@@ -68,25 +68,6 @@ export default function RoleSelector({ onSelectRole }: RoleSelectorProps) {
               Chalu Karein →
             </span>
           </motion.button>
-
-          {/* Kharche Button */}
-          <motion.button
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-            onClick={() => onSelectRole('kharche')}
-            className="w-full bg-amber-600 text-white font-bold text-lg py-4 px-6 rounded-2xl shadow-xl flex items-center justify-between hover:bg-amber-700 transition-all group"
-            id="role-expenses"
-          >
-            <span className="flex items-center gap-3">
-              <span className="bg-amber-500 p-2.5 rounded-xl text-white group-hover:scale-110 transition-transform shadow-inner">
-                <Banknote className="w-5 h-5" />
-              </span>
-              <span>💸 Kharche & Profit</span>
-            </span>
-            <span className="text-amber-100 font-normal text-xs bg-amber-700/40 px-2.5 py-1 rounded-full">
-              Hisaab →
-            </span>
-          </motion.button>
         </div>
 
         <p className="text-sky-900/60 text-xs font-semibold mt-10">

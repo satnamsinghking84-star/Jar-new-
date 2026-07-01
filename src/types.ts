@@ -40,4 +40,14 @@ export interface Expense {
   notes?: string;
 }
 
+export interface Reminder {
+  id: string;
+  title: string;
+  lastDoneDate: string; // YYYY-MM-DD
+  intervalDays: number; // Interval in days (e.g., 30, 90)
+  nextDueDate: string;  // YYYY-MM-DD
+  notes?: string;
+  addedOn: string;
+}
+
 export type UserRole = 'owner' | 'boy' | 'kharche' | null;

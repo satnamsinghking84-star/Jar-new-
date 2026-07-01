@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, Table, FileText, Send, HelpCircle, CheckCircle2, Cloud, Lock, KeyRound, Eye, EyeOff, ShieldAlert } from 'lucide-react';
-import { Customer, Expense, UserRole } from './types';
+import { Plus, Table, FileText, Send, HelpCircle, CheckCircle2, Cloud, Lock, KeyRound, Eye, EyeOff, ShieldAlert, Search, ArrowUp, Filter } from 'lucide-react';
+import { Customer, Expense, UserRole, Reminder } from './types';
 import {
   loadCustomers,
   saveCustomers,
@@ -9,8 +9,10 @@ import {
   saveStock,
   loadExpenses,
   saveExpenses,
+  loadReminders,
+  saveReminders,
 } from './utils/storage';
-import { todayStr } from './utils/helpers';
+import { todayStr, getOverdueDays } from './utils/helpers';
 import {
   exportExcel,
   exportPDF,
@@ -31,6 +33,8 @@ import PendingPayments from './components/PendingPayments';
 import CustomerCard from './components/CustomerCard';
 import ExpenseSection from './components/ExpenseSection';
 import DeliveryBoySection from './components/DeliveryBoySection';
+import OverduePaymentsAlert from './components/OverduePaymentsAlert';
+import ReminderSection from './components/ReminderSection';
 
 // Import Modals
 import {
@@ -51,6 +55,7 @@ export default function App() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [stock, setStock] = useState<number>(0);
+  const [reminders, setReminders] = useState<Reminder[]>([]);
 
   // Security / Password States
   const [isOwnerAuthenticated, setIsOwnerAuthenticated] = useState<boolean>(() => {
@@ -65,6 +70,11 @@ export default function App() {
   const [dashToDate, setDashToDate] = useState('');
   const [expFromDate, setExpFromDate] = useState('');
   const [expToDate, setExpToDate] = useState('');
+
+  // Tab & Scroll Control States
+  const [activeTab, setActiveTab] = useState<'customers' | 'stats' | 'reminders' | 'expenses'>('customers');
+  const [customerSearch, setCustomerSearch] = useState('');
+  const [customerFilterStatus, setCustomerFilterStatus] = useState<'all' | 'active' | 'closed'>('active');
 
   // Toast Notification States
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -217,10 +227,47 @@ export default function App() {
       }
     );
 
+    const unsubscribeReminders = onSnapshot(
+      collection(db, 'reminders'),
+      (snapshot) => {
+        const list: Reminder[] = [];
+        snapshot.forEach((docSnap) => {
+          list.push({ id: docSnap.id, ...docSnap.data() } as Reminder);
+        });
+
+        if (list.length > 0) {
+          list.sort((a, b) => new Date(b.addedOn || 0).getTime() - new Date(a.addedOn || 0).getTime());
+          setReminders(list);
+          localStorage.setItem('jarReminders', JSON.stringify(list));
+        } else {
+          const saved = localStorage.getItem('jarReminders');
+          if (saved) {
+            const local = JSON.parse(saved) as Reminder[];
+            if (local && local.length > 0) {
+              console.log('Migrating local reminders to empty Firestore...');
+              local.forEach(async (rem) => {
+                try {
+                  await setDoc(doc(db, 'reminders', rem.id), rem);
+                } catch (e) {
+                  console.error('Error migrating reminder:', rem.id, e);
+                }
+              });
+            }
+          } else {
+            setReminders([]);
+          }
+        }
+      },
+      (error) => {
+        console.error('Firestore reminders sync error:', error);
+      }
+    );
+
     return () => {
       unsubscribeCustomers();
       unsubscribeExpenses();
       unsubscribeStock();
+      unsubscribeReminders();
     };
   }, []);
 
@@ -289,6 +336,20 @@ export default function App() {
     } catch (error) {
       console.error('Error toggling customer status:', error);
       showToast('❌ Cloud save fail! Status update nahi ho saki.');
+    }
+  };
+
+  const handleSyncJarsCount = async (id: string, count: number) => {
+    const cust = customers.find(c => c.id === id);
+    if (cust) {
+      const updatedCust = { ...cust, jarsAtCustomer: count };
+      try {
+        await setDoc(doc(db, 'customers', id), updatedCust);
+        showToast(`✅ Jar count correct kar diya gaya hai! (Unke paas: ${count} Jar)`);
+      } catch (error) {
+        console.error('Error syncing jars count:', error);
+        showToast('❌ Calculation update fail! Dobara koshish karein.');
+      }
     }
   };
 
@@ -503,6 +564,26 @@ export default function App() {
       setExpenses(updated);
       saveExpenses(updated);
       showToast('❌ Cloud delete fail! Local copy delete ho gayi.');
+    }
+  };
+
+  const handleSaveReminder = async (rem: Reminder) => {
+    try {
+      await setDoc(doc(db, 'reminders', rem.id), rem);
+      showToast('✅ Reminder details save ho gayi!');
+    } catch (error) {
+      console.error('Error saving reminder:', error);
+      showToast('❌ Cloud save fail! Internet connection check karein.');
+    }
+  };
+
+  const handleDeleteReminder = async (id: string) => {
+    try {
+      await deleteDoc(doc(db, 'reminders', id));
+      showToast('🗑️ Reminder successfully delete ho gaya!');
+    } catch (error) {
+      console.error('Error deleting reminder:', error);
+      showToast('❌ Cloud delete fail! Internet connection check karein.');
     }
   };
 
@@ -739,108 +820,330 @@ export default function App() {
         {/* 3. OWNER DASHBOARD VIEW */}
         {role === 'owner' && isOwnerAuthenticated && (
           <div className="space-y-4 animate-in fade-in duration-350">
-            {/* Dashboard metrics cards */}
-            <Dashboard
-              customers={customers}
-              fromDate={dashFromDate}
-              toDate={dashToDate}
-              onFromDateChange={setDashFromDate}
-              onToDateChange={setDashToDate}
-              onClearRange={() => {
-                setDashFromDate('');
-                setDashToDate('');
-              }}
-            />
-
-            {/* Distributed and local stock manager */}
-            <StockSection
-              customers={customers}
-              stock={stock}
-              onStockChange={handleStockChange}
-            />
-
-            {/* Outstanding invoices alerts */}
-            <PendingPayments
-              customers={customers}
-              onOpenCashPayment={handleOpenCashPayModal}
-            />
-
-            {/* Share / export reporting bar */}
-            <div className="grid grid-cols-3 gap-2 px-4 mt-4">
+            
+            {/* Premium Sticky Navigation Tabs */}
+            <div className="bg-slate-100/80 backdrop-blur-md p-1.5 rounded-2xl mx-4 flex gap-1 border border-slate-200/50 shadow-inner">
               <button
-                onClick={handleExportExcel}
-                className="bg-emerald-800 text-white font-extrabold py-3.5 px-2 rounded-xl text-xs flex items-center justify-center gap-1 cursor-pointer hover:brightness-105 active:scale-[0.98] transition-all shadow-sm"
+                type="button"
+                onClick={() => setActiveTab('customers')}
+                className={`flex-1 py-3 px-1 rounded-xl font-black text-[11px] sm:text-xs transition-all flex flex-col sm:flex-row items-center justify-center gap-1 cursor-pointer ${
+                  activeTab === 'customers'
+                    ? 'bg-white text-blue-600 shadow-sm scale-[1.01]'
+                    : 'text-slate-500 hover:text-slate-800 hover:bg-white/40'
+                }`}
               >
-                <Table className="w-4 h-4 shrink-0" />
-                <span>📊 Excel</span>
+                <span>👥 Customers</span>
+                <span className={`text-[9px] font-extrabold px-1.5 py-0.5 rounded-full ${
+                  activeTab === 'customers' ? 'bg-blue-100 text-blue-700' : 'bg-slate-200 text-slate-600'
+                }`}>
+                  {customers.filter(c => c.status !== 'closed').length}
+                </span>
               </button>
 
               <button
-                onClick={() => setIsGlobalPdfModalOpen(true)}
-                className="bg-red-800 text-white font-extrabold py-3.5 px-2 rounded-xl text-xs flex items-center justify-center gap-1 cursor-pointer hover:brightness-105 active:scale-[0.98] transition-all shadow-sm"
+                type="button"
+                onClick={() => setActiveTab('stats')}
+                className={`flex-1 py-3 px-1 rounded-xl font-black text-[11px] sm:text-xs transition-all flex flex-col sm:flex-row items-center justify-center gap-1 cursor-pointer ${
+                  activeTab === 'stats'
+                    ? 'bg-white text-blue-600 shadow-sm scale-[1.01]'
+                    : 'text-slate-500 hover:text-slate-800 hover:bg-white/40'
+                }`}
               >
-                <FileText className="w-4 h-4 shrink-0" />
-                <span>📄 PDF</span>
+                <span>📈 Stats & Stock</span>
               </button>
 
               <button
-                onClick={handleShareOnWhatsApp}
-                className="bg-emerald-600 text-white font-extrabold py-3.5 px-2 rounded-xl text-xs flex items-center justify-center gap-1 cursor-pointer hover:brightness-105 active:scale-[0.98] transition-all shadow-sm"
+                type="button"
+                onClick={() => setActiveTab('reminders')}
+                className={`flex-1 py-3 px-1 rounded-xl font-black text-[11px] sm:text-xs transition-all flex flex-col sm:flex-row items-center justify-center gap-1 cursor-pointer relative ${
+                  activeTab === 'reminders'
+                    ? 'bg-white text-blue-600 shadow-sm scale-[1.01]'
+                    : 'text-slate-500 hover:text-slate-800 hover:bg-white/40'
+                }`}
               >
-                <Send className="w-4 h-4 shrink-0" />
-                <span>💬 WhatsApp</span>
+                <span>🔔 Alerts</span>
+                {customers.some(c => c.status !== 'closed' && getOverdueDays(c) > 10) && (
+                  <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 bg-red-500 rounded-full animate-ping"></span>
+                )}
               </button>
-            </div>
 
-            {/* Add customer button bar */}
-            <div className="px-4">
               <button
-                onClick={handleOpenAddCustomer}
-                className="w-full bg-gradient-to-r from-emerald-600 to-teal-500 hover:brightness-105 text-white font-extrabold py-4 px-6 rounded-2xl shadow-md text-sm flex items-center justify-center gap-2 cursor-pointer transition-all border border-emerald-500"
-                id="btn-add-customer"
+                type="button"
+                onClick={() => setActiveTab('expenses')}
+                className={`flex-1 py-3 px-1 rounded-xl font-black text-[11px] sm:text-xs transition-all flex flex-col sm:flex-row items-center justify-center gap-1 cursor-pointer ${
+                  activeTab === 'expenses'
+                    ? 'bg-white text-blue-600 shadow-sm scale-[1.01]'
+                    : 'text-slate-500 hover:text-slate-800 hover:bg-white/40'
+                }`}
               >
-                <Plus className="w-5 h-5" />
-                <span>➕ Naya Customer Joḍo</span>
+                <span>💸 Kharche</span>
               </button>
             </div>
 
-            {/* Customer List block */}
-            <div className="px-4 space-y-4 pb-20">
-              {customers.length === 0 ? (
-                <div className="text-center py-16 text-slate-400 bg-white rounded-2xl border border-slate-100 shadow-sm flex flex-col items-center p-4">
-                  <HelpCircle className="w-12 h-12 text-slate-300 mb-2 animate-bounce" />
-                  <p className="text-sm font-semibold">Abhi koi customer added nahi hai.</p>
-                  <p className="text-xs text-slate-400 mt-1">Upar diye "Naya Customer Joḍo" button se chalu karein!</p>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  <div className="text-xs uppercase tracking-wider text-slate-400 font-extrabold pl-1 mb-1 flex items-center justify-between">
-                    <span>📋 Total: {customers.length} Customers</span>
-                    <span className="flex items-center gap-2 font-black">
-                      <span className="text-emerald-600">🟢 Active: {customers.filter(c => c.status !== 'closed').length}</span>
-                      <span className="text-slate-500">⚪ Closed: {customers.filter(c => c.status === 'closed').length}</span>
-                    </span>
+            {/* TAB CONTENT: CUSTOMERS */}
+            {activeTab === 'customers' && (
+              <div className="space-y-4 animate-in fade-in duration-200">
+                
+                {/* Search & Status Filters Card */}
+                <div className="mx-4 bg-white border border-slate-100 p-4 rounded-3xl shadow-sm space-y-3.5">
+                  <div className="relative">
+                    <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
+                    <input
+                      type="text"
+                      value={customerSearch}
+                      onChange={(e) => setCustomerSearch(e.target.value)}
+                      placeholder="Customer name, phone ya address search karein..."
+                      className="w-full bg-slate-50/50 border border-slate-200 rounded-2xl pl-10 pr-9 py-3 text-xs sm:text-sm font-semibold text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-4 focus:ring-blue-100 focus:border-blue-500 focus:bg-white transition-all"
+                    />
+                    {customerSearch && (
+                      <button
+                        type="button"
+                        onClick={() => setCustomerSearch('')}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 font-extrabold text-xs cursor-pointer p-1"
+                      >
+                        ❌
+                      </button>
+                    )}
                   </div>
 
-                  {customers.map((c, i) => (
-                    <CustomerCard
-                      key={c.id}
-                      customer={c}
-                      index={i}
-                      onOpenDeliver={handleOpenDeliverModal}
-                      onOpenPayment={handleOpenPayModal}
-                      onOpenPdfModal={id => handleOpenCustReportModal(id, 'pdf')}
-                      onOpenExcelModal={id => handleOpenCustReportModal(id, 'excel')}
-                      onOpenEdit={handleOpenEditCustomer}
-                      onDelete={handleDeleteCustomer}
-                      onOpenTimingModal={handleOpenTimingModal}
-                      onOpenEditDelivery={handleOpenEditDeliveryModal}
-                      onToggleStatus={handleToggleStatus}
-                    />
-                  ))}
+                  {/* Status Toggle buttons */}
+                  <div className="flex items-center gap-1.5 bg-slate-50 p-1 rounded-xl border border-slate-100">
+                    <button
+                      type="button"
+                      onClick={() => setCustomerFilterStatus('active')}
+                      className={`flex-1 py-2 rounded-lg font-bold text-xs transition-all cursor-pointer ${
+                        customerFilterStatus === 'active'
+                          ? 'bg-emerald-600 text-white shadow-sm'
+                          : 'text-slate-500 hover:text-slate-800'
+                      }`}
+                    >
+                      🟢 Active ({customers.filter(c => c.status !== 'closed').length})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCustomerFilterStatus('closed')}
+                      className={`flex-1 py-2 rounded-lg font-bold text-xs transition-all cursor-pointer ${
+                        customerFilterStatus === 'closed'
+                          ? 'bg-slate-600 text-white shadow-sm'
+                          : 'text-slate-500 hover:text-slate-800'
+                      }`}
+                    >
+                      ⚪ Closed ({customers.filter(c => c.status === 'closed').length})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCustomerFilterStatus('all')}
+                      className={`flex-1 py-2 rounded-lg font-bold text-xs transition-all cursor-pointer ${
+                        customerFilterStatus === 'all'
+                          ? 'bg-blue-600 text-white shadow-sm'
+                          : 'text-slate-500 hover:text-slate-800'
+                      }`}
+                    >
+                      🌐 All ({customers.length})
+                    </button>
+                  </div>
                 </div>
-              )}
-            </div>
+
+                {/* Add customer button bar */}
+                <div className="px-4">
+                  <button
+                    type="button"
+                    onClick={handleOpenAddCustomer}
+                    className="w-full bg-gradient-to-r from-emerald-600 to-teal-500 hover:brightness-105 text-white font-extrabold py-3.5 px-6 rounded-2xl shadow-md text-xs sm:text-sm flex items-center justify-center gap-2 cursor-pointer transition-all border border-emerald-500"
+                    id="btn-add-customer"
+                  >
+                    <Plus className="w-5 h-5 animate-pulse" />
+                    <span>➕ Naya Customer Joḍo</span>
+                  </button>
+                </div>
+
+                {/* Customer List block */}
+                <div className="px-4 space-y-4 pb-20">
+                  {(() => {
+                    const filtered = customers.filter(c => {
+                      const query = customerSearch.trim().toLowerCase();
+                      const matchesSearch = 
+                        c.name.toLowerCase().includes(query) ||
+                        (c.address || '').toLowerCase().includes(query) ||
+                        (c.phone || '').toLowerCase().includes(query);
+
+                      const isClosed = c.status === 'closed';
+                      if (customerFilterStatus === 'active') {
+                        return matchesSearch && !isClosed;
+                      }
+                      if (customerFilterStatus === 'closed') {
+                        return matchesSearch && isClosed;
+                      }
+                      return matchesSearch;
+                    });
+
+                    if (filtered.length === 0) {
+                      return (
+                        <div className="text-center py-16 text-slate-400 bg-white rounded-3xl border border-slate-100 shadow-sm flex flex-col items-center p-4">
+                          <HelpCircle className="w-12 h-12 text-slate-300 mb-2 animate-bounce" />
+                          <p className="text-sm font-semibold">Koi match nahi mila.</p>
+                          <p className="text-xs text-slate-400 mt-1">Kuch aur search karke dekhein ya search clear karein.</p>
+                          {customerSearch && (
+                            <button
+                              type="button"
+                              onClick={() => setCustomerSearch('')}
+                              className="mt-4 bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 font-extrabold px-4 py-2 rounded-xl text-xs transition-colors cursor-pointer"
+                            >
+                              Search Clear Karein
+                            </button>
+                          )}
+                        </div>
+                      );
+                    }
+
+                    return (
+                      <div className="space-y-4">
+                        <div className="text-[10px] uppercase tracking-wider text-slate-400 font-extrabold pl-1 mb-1 flex items-center justify-between">
+                          <span>📋 Matches Found: {filtered.length} Customers</span>
+                          <span className="font-bold text-slate-500">
+                            Status Filter: {customerFilterStatus.toUpperCase()}
+                          </span>
+                        </div>
+
+                        {filtered.map((c, i) => (
+                          <CustomerCard
+                            key={c.id}
+                            customer={c}
+                            index={i}
+                            onOpenDeliver={handleOpenDeliverModal}
+                            onOpenPayment={handleOpenPayModal}
+                            onOpenPdfModal={id => handleOpenCustReportModal(id, 'pdf')}
+                            onOpenExcelModal={id => handleOpenCustReportModal(id, 'excel')}
+                            onOpenEdit={handleOpenEditCustomer}
+                            onDelete={handleDeleteCustomer}
+                            onOpenTimingModal={handleOpenTimingModal}
+                            onOpenEditDelivery={handleOpenEditDeliveryModal}
+                            onToggleStatus={handleToggleStatus}
+                            onSyncJarsCount={handleSyncJarsCount}
+                          />
+                        ))}
+                      </div>
+                    );
+                  })()}
+                </div>
+              </div>
+            )}
+
+            {/* TAB CONTENT: STATS & STOCK */}
+            {activeTab === 'stats' && (
+              <div className="space-y-4 animate-in fade-in duration-200 pb-20">
+                {/* Dashboard metrics cards */}
+                <Dashboard
+                  customers={customers}
+                  fromDate={dashFromDate}
+                  toDate={dashToDate}
+                  onFromDateChange={setDashFromDate}
+                  onToDateChange={setDashToDate}
+                  onClearRange={() => {
+                    setDashFromDate('');
+                    setDashToDate('');
+                  }}
+                />
+
+                {/* Distributed and local stock manager */}
+                <StockSection
+                  customers={customers}
+                  stock={stock}
+                  onStockChange={handleStockChange}
+                />
+
+                {/* Share / export reporting bar */}
+                <div className="bg-white border border-slate-100 rounded-3xl p-4 mx-4 shadow-sm space-y-3">
+                  <span className="font-extrabold text-[11px] text-slate-500 uppercase block pl-1 tracking-wider">
+                    📤 Overall Reports Nikalein (Excel / PDF)
+                  </span>
+                  <div className="grid grid-cols-3 gap-2">
+                    <button
+                      type="button"
+                      onClick={handleExportExcel}
+                      className="bg-emerald-800 text-white font-extrabold py-3.5 px-2 rounded-xl text-xs flex items-center justify-center gap-1 cursor-pointer hover:brightness-105 active:scale-[0.98] transition-all shadow-sm"
+                    >
+                      <Table className="w-4 h-4 shrink-0" />
+                      <span>📊 Excel</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setIsGlobalPdfModalOpen(true)}
+                      className="bg-red-800 text-white font-extrabold py-3.5 px-2 rounded-xl text-xs flex items-center justify-center gap-1 cursor-pointer hover:brightness-105 active:scale-[0.98] transition-all shadow-sm"
+                    >
+                      <FileText className="w-4 h-4 shrink-0" />
+                      <span>📄 PDF</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={handleShareOnWhatsApp}
+                      className="bg-emerald-600 text-white font-extrabold py-3.5 px-2 rounded-xl text-xs flex items-center justify-center gap-1 cursor-pointer hover:brightness-105 active:scale-[0.98] transition-all shadow-sm"
+                    >
+                      <Send className="w-4 h-4 shrink-0" />
+                      <span>💬 WhatsApp</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* TAB CONTENT: ALERTS & REMINDERS */}
+            {activeTab === 'reminders' && (
+              <div className="space-y-4 animate-in fade-in duration-200 pb-20">
+                {/* Overdue Payments Alert Box (with blinking indicator) */}
+                <OverduePaymentsAlert
+                  customers={customers}
+                  onOpenCashPayment={handleOpenCashPayModal}
+                />
+
+                {/* Outstanding invoices alerts */}
+                <PendingPayments
+                  customers={customers}
+                  onOpenCashPayment={handleOpenCashPayModal}
+                />
+
+                {/* Service and Maintenance Reminders (Motor, Tank, Filter) */}
+                <ReminderSection
+                  reminders={reminders}
+                  onSaveReminder={handleSaveReminder}
+                  onDeleteReminder={handleDeleteReminder}
+                />
+              </div>
+            )}
+
+            {/* TAB CONTENT: KHARCHE & EXPENSES (PROFIT TABLE) */}
+            {activeTab === 'expenses' && (
+              <div className="space-y-4 animate-in fade-in duration-200 pb-20">
+                <ExpenseSection
+                  expenses={expenses}
+                  customers={customers}
+                  fromDate={expFromDate}
+                  toDate={expToDate}
+                  onFromDateChange={setExpFromDate}
+                  onToDateChange={setExpToDate}
+                  onClearRange={() => {
+                    setExpFromDate('');
+                    setExpToDate('');
+                  }}
+                  onOpenAddExpense={handleOpenAddExpense}
+                  onOpenEditExpense={handleOpenEditExpense}
+                  onDeleteExpense={handleDeleteExpense}
+                />
+              </div>
+            )}
+
+            {/* Float Scroll-to-Top trigger for easy scrolling avoidance */}
+            <button
+              type="button"
+              onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+              className="fixed bottom-6 right-6 z-50 bg-slate-900/90 text-white p-3 rounded-full shadow-2xl hover:bg-slate-800 transition-all active:scale-95 cursor-pointer flex items-center justify-center border border-slate-700/50"
+              title="Scroll to Top"
+            >
+              <ArrowUp className="w-5 h-5 animate-pulse" />
+            </button>
+
           </div>
         )}
 

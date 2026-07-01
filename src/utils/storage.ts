@@ -1,8 +1,9 @@
-import { Customer, Expense } from '../types';
+import { Customer, Expense, Reminder } from '../types';
 
 const CUSTOMERS_KEY = 'jarBiz_v2';
 const STOCK_KEY = 'jarBiz_stock';
 const EXPENSES_KEY = 'jarBiz_kharche';
+const REMINDERS_KEY = 'jarBiz_reminders';
 
 export function loadCustomers(): Customer[] {
   try {
@@ -57,3 +58,22 @@ export function saveExpenses(expenses: Expense[]): void {
     console.error('Error saving expenses:', error);
   }
 }
+
+export function loadReminders(): Reminder[] {
+  try {
+    const data = localStorage.getItem(REMINDERS_KEY);
+    return data ? JSON.parse(data) : [];
+  } catch (error) {
+    console.error('Error loading reminders:', error);
+    return [];
+  }
+}
+
+export function saveReminders(reminders: Reminder[]): void {
+  try {
+    localStorage.setItem(REMINDERS_KEY, JSON.stringify(reminders));
+  } catch (error) {
+    console.error('Error saving reminders:', error);
+  }
+}
+
